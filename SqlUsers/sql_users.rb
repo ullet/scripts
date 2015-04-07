@@ -14,7 +14,9 @@
 # of) the production database).
 # ------------------------------------------------------------------------------
 
-def generate connection_strings_file
+def generate(connection_strings_file, options={})
+  options = {login_mode: :create}.merge(options)
+
   File.open(connection_strings_file, 'r') do |file|
     users = {}
     db_users = {}
@@ -54,11 +56,15 @@ def generate connection_strings_file
     end
     puts "USE [master]"
     users.each do |user, data|
-      puts "CREATE LOGIN #{user} WITH PASSWORD='#{data[:pwd]}', CHECK_POLICY=OFF"
+      sql = 
+        (options[:login] == :alter ? "ALTER" : "CREATE") +
+        " LOGIN #{user} WITH PASSWORD='#{data[:pwd]}'" +
+        (options[:login] == :create ? ", CHECK_POLICY=OFF" : "")
+      puts sql
     end
     puts
     db_users.each do |db, users|
-      puts "USE [#{db}]"      
+      puts "USE [#{db}]"
       users.each do |user|
         puts "EXEC sp_change_users_login 'Auto_Fix', '#{user}'"
       end
@@ -67,8 +73,23 @@ def generate connection_strings_file
   end
 end
 
-if not ARGV or not ARGV.any?
-  puts "Please specify path of connection strings file"
+# crude option parsing
+path = nil
+options = {}
+if ARGV && ARGV.any?
+  if ARGV[0] == '--alter' && ARGV[1]  
+    path = ARGV[1]
+    options[:login] = :alter
+  else
+    path = ARGV[0]
+    if ARGV[1] == '--alter'
+      options[:login] = :alter
+    end
+  end
+end
+
+if path
+  generate(path, options)
 else
-  generate ARGV[0]
+  puts 'Please specify path of connection strings file'
 end
