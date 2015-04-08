@@ -14,12 +14,29 @@
 # of) the production database).
 # ------------------------------------------------------------------------------
 
-require_relative 'argument_parser'
-require_relative 'generator'
-
-args = Arguments.new(ARGV)
-if args.valid?
-  puts Generator.new(args[:path], args[:options]).generate
-else
-  puts 'Please specify path of connection strings file'
+# crude command line argument parsing
+class Arguments < Hash
+  def initialize(args)
+    path = nil
+    options = {}
+    if args && args.any?
+      if args[0] == '--alter'
+        if args[1]
+          path = args[1]
+          options[:login] = :alter
+        end
+      else
+        path = args[0]
+        if args[1] == '--alter'
+          options[:login] = :alter
+        end
+      end
+    end
+    self[:path] = path
+    self[:options] = options
+  end
+  
+  def valid?
+    !self[:path].nil?
+  end
 end
