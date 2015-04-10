@@ -27,9 +27,7 @@ class Arguments < Hash
         end
       else
         path = args[0]
-        if args[1] == '--alter'
-          options[:login] = :alter
-        end
+        options[:login] = :alter if args[1] == '--alter'
       end
     end
     self[:path] = path

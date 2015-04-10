@@ -15,72 +15,42 @@
 # ------------------------------------------------------------------------------
 
 class Generator
-  def initialize(connection_strings_file, options={})
-    @connection_strings_file = connection_strings_file
-    @options = {login_mode: :create}.merge(options)
+  def initialize(accounts, options = {})
+    @accounts = accounts
+    @options = { login_mode: :create }.merge(options)
   end
 
-  def generate()
-    lines = []
-
-    File.open(connection_strings_file, 'r') do |file|
-      users = {}
-      db_users = {}
-      while (line = file.gets)
-        line.chomp
-        pattern = 'initial catalog\s*=\s*([^;]+);.*?' +
-                  'uid\s*=\s*([^;]+);.*?' +
-                  'pwd\s*=\s*([^";]+)'
-        match = (/#{pattern}/i).match line
-        if not match
-          pattern = 'database\s*=\s*([^;]+);.*?' +
-                    'uid\s*=\s*([^;]+);.*?' +
-                    'pwd\s*=\s*([^";]+)'
-          match = (/#{pattern}/i).match line
-          if not match
-            pattern = 'initial catalog\s*=\s*([^;]+);.*?' +
-                      'user id\s*=\s*([^;]+);.*?' +
-                      'password\s*=\s*([^";]+)'
-            match = (/#{pattern}/i).match line
-            if not match
-              pattern = 'database\s*=\s*([^;]+);.*?' +
-                        'user id\s*=\s*([^;]+);.*?' +
-                        'password\s*=\s*([^";]+)'
-              match = (/#{pattern}/i).match line
-            end
-          end
-        end
-        if match
-          db = match[1]
-          uid = match[2]
-          pwd = match[3]
-          users[uid] = {:pwd => pwd, :dbs=>[]} unless users[uid]
-          users[uid][:dbs] << db unless users[uid][:dbs].any? {|d| d == db}
-          db_users[db] = [] unless db_users[db]
-          db_users[db] << uid unless db_users[db].any? {|u| u == uid}
-        end
-      end
-      lines << "USE [master]"
-      users.each do |user, data|
-        sql = 
-          (options[:login] == :alter ? "ALTER" : "CREATE") +
-          " LOGIN #{user} WITH PASSWORD='#{data[:pwd]}'" +
-          (options[:login] == :create ? ", CHECK_POLICY=OFF" : "")
-        lines << sql
-      end
-      lines << ''
-      db_users.each do |db, users|
-        lines << "USE [#{db}]"
-        users.each do |user|
-          lines << "EXEC sp_change_users_login 'Auto_Fix', '#{user}'"
-        end
-        lines << ''
-      end
-    end
-    (lines << '').join("\n")
+  def generate
+    [
+      'USE [master]',
+      accounts.server_logins.map do |username, data|
+        login_sql(username, data)
+      end,
+      '',
+      accounts.database_users.map { |db, users| fix_users_sql(users, db) },
+      ''
+    ].flatten.join("\n")
   end
-  
+
   private
-  
-  attr_reader :connection_strings_file, :options
+
+  attr_reader :accounts, :options
+
+  def login_sql(username, data)
+    (options[:login] == :alter ? 'ALTER' : 'CREATE') +
+      " LOGIN #{username} WITH PASSWORD='#{data[:pwd]}'" +
+      (options[:login] == :create ? ', CHECK_POLICY=OFF' : '')
+  end
+
+  def fix_users_sql(users, db)
+    [
+      "USE [#{db}]",
+      users.map(&method(:fix_user_sql)),
+      ''
+    ].flatten
+  end
+
+  def fix_user_sql(user)
+    "EXEC sp_change_users_login 'Auto_Fix', '#{user}'"
+  end
 end

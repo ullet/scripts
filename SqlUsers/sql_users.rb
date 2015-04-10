@@ -14,12 +14,13 @@
 # of) the production database).
 # ------------------------------------------------------------------------------
 
-require_relative 'argument_parser'
+require_relative 'accounts'
+require_relative 'arguments'
 require_relative 'generator'
 
 args = Arguments.new(ARGV)
 if args.valid?
-  puts Generator.new(args[:path], args[:options]).generate
+  puts Generator.new(Accounts.new(args[:path]), args[:options]).generate
 else
   puts 'Please specify path of connection strings file'
 end
